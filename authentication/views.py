@@ -78,6 +78,8 @@ class UserViewSet(ModelViewSet):
 
     @action(methods=['GET'], detail=False, permission_classes=[IsAuthenticated], url_path='me')
     def get_user(self, request):
+        print(request.user)  # Должен вывести email или username пользователя
+
         user = request.user
         data = self.serializer_class(user).data
 
