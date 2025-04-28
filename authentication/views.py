@@ -14,43 +14,63 @@ class UserViewSet(ModelViewSet):
 
     @action(methods=['POST'], detail=False, url_path='register')
     def register(self, request):
-        serializer = self.serializer_class(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
+        # Убираем email, используем телефон для регистрации
+        phone_number = request.data.get('phone_number')
+        if not phone_number:
+            raise ValidationError({'error': 'Номер телефона обязателен.'})
+        
+        # Создаём пользователя
         user = User(
-            email=serializer.validated_data['email'],
-            first_name=serializer.validated_data['first_name'],
-            last_name=serializer.validated_data['last_name'],
-            phone_number=serializer.validated_data['phone_number'],
-            sex=serializer.validated_data['sex'],
-            date=serializer.validated_data['date'],
+            phone_number=phone_number,
+            first_name=request.data.get('first_name'),
+            last_name=request.data.get('last_name'),
+            middle_name=request.data.get('middle_name', ''),
+            sex=request.data.get('sex'),
+            date_of_birth=request.data.get('date_of_birth'),
+            passport_series=request.data.get('passport_series'),
+            passport_number=request.data.get('passport_number'),
+            passport_issued_by=request.data.get('passport_issued_by'),
+            passport_issue_date=request.data.get('passport_issue_date'),
             is_active=True
         )
-        user.set_password(serializer.validated_data['password'])
+        
+        # Создаём пароль для пользователя
+        password = request.data.get('password')
+        if password:
+            user.set_password(password)
+        
         user.save()
 
-        # Определяем, кого регистрируем
+        # Определяем, кого регистрируем: пенсионер или волонтёр
         if request.data.get("is_pensioner"):
             user.is_pensioner = True
             user.save()
-            PensionerProfile.objects.create(user=user, address=request.data.get("address", ""))
+            PensionerProfile.objects.create(
+                user=user,
+                address=request.data.get("address", "")
+            )
         elif request.data.get("is_volunteer"):
             user.is_volunteer = True
             user.save()
-            VolunteerProfile.objects.create(user=user, experience=request.data.get("experience", ""))
+            VolunteerProfile.objects.create(
+                user=user,
+                experience=request.data.get("experience", ""),
+                work_zone=request.data.get("work_zone", ""),
+                company_name=request.data.get("company_name", "")
+            )
 
         return Response({'message': 'Регистрация успешна'})
 
     @action(methods=['POST'], detail=False, url_path='login')
     def login(self, request):
-        email = request.data.get('email')
+        phone_number = request.data.get('phone_number')
         password = request.data.get('password')
 
-        if not email or not password:
-            raise ValidationError({'error': 'E-mail и пароль обязательны'})
+        if not phone_number or not password:
+            raise ValidationError({'error': 'Номер телефона и пароль обязательны'})
 
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.get(phone_number=phone_number)
         except User.DoesNotExist:
             raise NotFound({'error': 'Пользователь не найден'})
 
@@ -60,13 +80,14 @@ class UserViewSet(ModelViewSet):
         if not user.is_active:
             raise AuthenticationFailed({'error': 'Аккаунт не активирован'})
 
+        # Генерация JWT-токенов
         refresh = RefreshToken.for_user(user)
         response = Response()
         response.set_cookie('refresh', str(refresh))
         response.data = {
             'accessToken': str(refresh.access_token),
             'user': {
-                'email': user.email,
+                'phone_number': user.phone_number,
                 'first_name': user.first_name,
                 'last_name': user.last_name,
                 'is_pensioner': user.is_pensioner,
@@ -78,8 +99,6 @@ class UserViewSet(ModelViewSet):
 
     @action(methods=['GET'], detail=False, permission_classes=[IsAuthenticated], url_path='me')
     def get_user(self, request):
-        print(request.user)  # Должен вывести email или username пользователя
-
         user = request.user
         data = self.serializer_class(user).data
 

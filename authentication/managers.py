@@ -1,26 +1,30 @@
 from django.contrib.auth.models import BaseUserManager, Group
 
 class CustomUserManager(BaseUserManager):
-    def create_user(self, email, first_name, last_name, phone_number, sex, date, can_help=False, need_help=False, password=None, **extra_fields):
-        if not email:
-            raise ValueError('Email field must be set')
+    def create_user(self, phone_number, first_name, last_name, sex, date_of_birth, passport_series, passport_number,
+                    passport_issued_by, passport_issue_date, can_help=False, need_help=False, password=None, **extra_fields):
+        if not phone_number:
+            raise ValueError('Phone number field must be set')
         
-        email = self.normalize_email(email)
+        # Создаём пользователя
         user = self.model(
-            email=email,
+            phone_number=phone_number,
             first_name=first_name,
             last_name=last_name,
-            phone_number=phone_number,
             sex=sex,
-            date=date,
+            date_of_birth=date_of_birth,
+            passport_series=passport_series,
+            passport_number=passport_number,
+            passport_issued_by=passport_issued_by,
+            passport_issue_date=passport_issue_date,
             can_help=can_help,
             need_help=need_help,
             **extra_fields
         )
         user.set_password(password)
         user.save(using=self._db)
-        
-        # Assign user to the appropriate group
+
+        # Присваиваем группу
         if can_help:
             group, created = Group.objects.get_or_create(name='Volunteers')
             user.groups.add(group)
@@ -30,7 +34,8 @@ class CustomUserManager(BaseUserManager):
         
         return user
 
-    def create_superuser(self, email, first_name, last_name, phone_number, sex, password=None, **extra_fields):
+    def create_superuser(self, phone_number, first_name, last_name, sex, password=None, **extra_fields):
+        # Устанавливаем необходимые значения для суперпользователя
         extra_fields.setdefault('is_active', True)
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
@@ -42,4 +47,4 @@ class CustomUserManager(BaseUserManager):
         if extra_fields.get('is_superuser') is not True:
             raise ValueError('Superuser must have is_superuser=True.')
 
-        return self.create_user(email, first_name, last_name, phone_number, sex, password=password, **extra_fields)
+        return self.create_user(phone_number, first_name, last_name, sex, password=password, **extra_fields)
